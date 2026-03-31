@@ -1,0 +1,110 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>FITVISION IA</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://unpkg.com/lucide@latest"></script>
+</head>
+<body class="bg-black text-white font-sans">
+    <div id="app" class="max-w-md mx-auto min-h-screen flex flex-col p-8"></div>
+
+    <script>
+        // ATENÇÃO: COLOQUE SUA CHAVE DO GOOGLE AI STUDIO AQUI
+        const API_KEY = "SUA_CHAVE_AQUI"; 
+
+        const state = { view: 'home', manualText: '', analysis: null, loading: false, history: [] };
+
+        function render() {
+            const app = document.getElementById('app');
+            if (state.view === 'home') {
+                app.innerHTML = `
+                    <header class="mb-10">
+                        <h1 class="text-2xl font-black italic text-lime-400">FITVISION</h1>
+                        <p class="text-7xl font-black mt-4 tracking-tighter">${state.history.reduce((a, b) => a + b.calories, 0)}</p>
+                        <p class="text-zinc-600 font-bold uppercase text-[10px] tracking-widest">Kcal Totais Hoje</p>
+                    </header>
+                    <button onclick="changeView('manual')" class="w-full bg-zinc-900 border border-white/5 p-10 rounded-[3rem] flex items-center gap-6 active:scale-95 transition-transform">
+                        <div class="bg-lime-400 p-4 rounded-2xl text-black"><i data-lucide="edit-3"></i></div>
+                        <div class="text-left">
+                            <p class="font-black uppercase italic text-xl">Cálculo IA</p>
+                            <p class="text-[10px] text-zinc-600 font-bold uppercase">Qualquer comida do mundo</p>
+                        </div>
+                    </button>
+                    <div class="mt-10 space-y-4">
+                        <p class="text-[10px] font-black text-zinc-700 uppercase tracking-widest">Histórico</p>
+                        ${state.history.map(item => `
+                            <div class="bg-zinc-900/40 p-5 rounded-3xl border border-white/5 flex justify-between items-center">
+                                <span class="font-bold uppercase text-xs">${item.name}</span>
+                                <span class="text-lime-400 font-black">${item.calories} kcal</span>
+                            </div>
+                        `).join('')}
+                    </div>
+                `;
+            } else if (state.view === 'manual') {
+                app.innerHTML = `
+                    <button onclick="changeView('home')" class="mb-8 p-3 bg-zinc-900 rounded-2xl w-fit"><i data-lucide="x"></i></button>
+                    <div class="bg-zinc-900/50 p-8 rounded-[2.5rem] border border-white/5">
+                        <textarea id="inputArea" class="w-full h-40 bg-transparent text-2xl font-black outline-none resize-none" placeholder="Ex: 60g cuscuz e 2 ovos">${state.manualText}</textarea>
+                    </div>
+                    <button onclick="calculate()" class="w-full bg-lime-400 text-black py-6 rounded-[2rem] font-black uppercase mt-8 shadow-lg shadow-lime-400/20">Analisar com IA</button>
+                `;
+            } else if (state.view === 'results') {
+                app.innerHTML = `
+                    <div class="bg-zinc-900/90 backdrop-blur-xl p-10 rounded-[4rem] text-center border border-white/10">
+                        ${state.loading ? `
+                            <div class="py-10"><div class="w-12 h-12 border-4 border-lime-400 border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
+                            <p class="text-lime-400 font-black text-xs uppercase tracking-widest">Consultando IA...</p></div>
+                        ` : `
+                            <h2 class="text-3xl font-black uppercase italic tracking-tighter">${state.analysis.name}</h2>
+                            <p class="text-7xl font-black my-8 tracking-tighter">${state.analysis.calories}<span class="text-sm text-zinc-500 ml-2">kcal</span></p>
+                            <div class="grid grid-cols-3 gap-3">
+                                <div class="bg-black/40 p-4 rounded-2xl"><p class="text-blue-400 font-black text-xl">${state.analysis.protein}g</p><p class="text-[8px] text-zinc-600 font-bold uppercase">Prot</p></div>
+                                <div class="bg-black/40 p-4 rounded-2xl"><p class="text-orange-400 font-black text-xl">${state.analysis.carbs}g</p><p class="text-[8px] text-zinc-600 font-bold uppercase">Carb</p></div>
+                                <div class="bg-black/40 p-4 rounded-2xl"><p class="text-yellow-400 font-black text-xl">${state.analysis.fat}g</p><p class="text-[8px] text-zinc-600 font-bold uppercase">Gord</p></div>
+                            </div>
+                            <div class="grid grid-cols-2 gap-4 mt-10">
+                                <button onclick="changeView('manual')" class="py-5 bg-zinc-800 rounded-2xl font-black uppercase text-[10px]">Voltar</button>
+                                <button onclick="save()" class="py-5 bg-lime-400 text-black rounded-2xl font-black uppercase text-[10px]">Salvar</button>
+                            </div>
+                        `}
+                    </div>
+                `;
+            }
+            lucide.createIcons();
+        }
+
+        async function calculate() {
+            const text = document.getElementById('inputArea').value;
+            if(!text) return;
+            state.manualText = text;
+            state.view = 'results';
+            state.loading = true;
+            render();
+
+            try {
+                const prompt = `Analise nutricionalmente: "${text}". Responda APENAS um JSON: {"name": "Nome Curto", "calories": 0, "protein": 0, "carbs": 0, "fat": 0}`;
+                const resp = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${API_KEY}`, {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({ contents: [{ parts: [{ text: prompt }] }] })
+                });
+                const data = await resp.json();
+                const resText = data.candidates[0].content.parts[0].text;
+                state.analysis = JSON.parse(resText.replace(/```json|```/g, ''));
+            } catch (e) {
+                alert("Erro! Verifique sua API KEY no código.");
+                state.view = 'manual';
+            }
+            state.loading = false;
+            render();
+        }
+
+        function changeView(v) { state.view = v; render(); }
+        function save() { state.history.push(state.analysis); state.view = 'home'; render(); }
+
+        render();
+    </script>
+</body>
+</html>
