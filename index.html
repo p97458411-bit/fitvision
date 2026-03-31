@@ -12,7 +12,8 @@
 
     <script>
         // ATENÇÃO: COLOQUE SUA CHAVE DO GOOGLE AI STUDIO AQUI
-        const API_KEY = ""; 
+        const API_KEY = "const API_KEY = import.meta.env.VITE_GEMINI_API_KEY || "";
+"; 
 
         const state = { view: 'home', manualText: '', analysis: null, loading: false, history: [] };
 
